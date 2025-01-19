@@ -19,15 +19,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 version_config_list = [
-    "v1/32k.json",
-    "v1/40k.json",
-    "v1/48k.json",
-    "v2/48k.json",
-    "v2/32k.json",
+    os.path.join("paket", "v1", "32k.json"),  # Path relatif ke folder 'paket'
+    os.path.join("paket", "v1", "40k.json"),
+    os.path.join("paket", "v1", "48k.json"),
+    os.path.join("paket", "v2", "48k.json"),
+    os.path.join("paket", "v2", "32k.json"),
 ]
-
 
 def singleton_variable(func):
     def wrapper(*args, **kwargs):
@@ -37,7 +35,6 @@ def singleton_variable(func):
 
     wrapper.instance = None
     return wrapper
-
 
 @singleton_variable
 class Config:
@@ -62,11 +59,11 @@ class Config:
 
     @staticmethod
     def load_config_json() -> dict:
-        d = {}
-        for config_file in version_config_list:
-            with open(f"configs/{config_file}", "r") as f:
-                d[config_file] = json.load(f)
-        return d
+      d = {}
+      for config_file in version_config_list:
+        with open(config_file, "r") as f:
+            d[config_file] = json.load(f)
+      return d
 
     @staticmethod
     def arg_parse() -> tuple:
@@ -123,14 +120,10 @@ class Config:
     def use_fp32_config(self):
         for config_file in version_config_list:
             self.json_config[config_file]["train"]["fp16_run"] = False
-            with open(f"configs/{config_file}", "r") as f:
+            with open(f"{config_file}", "r") as f:
                 strr = f.read().replace("true", "false")
-            with open(f"configs/{config_file}", "w") as f:
+            with open(f"{config_file}", "w") as f:
                 f.write(strr)
-        with open("infer/modules/train/preprocess.py", "r") as f:
-            strr = f.read().replace("3.7", "3.0")
-        with open("infer/modules/train/preprocess.py", "w") as f:
-            f.write(strr)
         print("overwrite preprocess and configs.json")
 
     def device_config(self) -> tuple:
@@ -161,10 +154,7 @@ class Config:
                 + 0.4
             )
             if self.gpu_mem <= 4:
-                with open("infer/modules/train/preprocess.py", "r") as f:
-                    strr = f.read().replace("3.7", "3.0")
-                with open("infer/modules/train/preprocess.py", "w") as f:
-                    f.write(strr)
+                pass # Kode terkait preprocess.py dihapus
         elif self.has_mps():
             logger.info("No supported Nvidia GPU found")
             self.device = self.instead = "mps"
