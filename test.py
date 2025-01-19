@@ -1,6 +1,6 @@
 import os
 import sys
-
+import shutil
 from pathlib import Path
 from paket.modules import VC
 from paket.uvr_modules import uvr
@@ -11,7 +11,6 @@ import torch
 import numpy as np
 import gradio as gr
 import faiss
-import fairseq
 import pathlib
 import json
 from subprocess import Popen
@@ -27,8 +26,6 @@ if config.dml == True:
         res = x.clone().detach()
         return res
 
-    fairseq.modules.grad_multiply.GradMultiply.forward = forward_dml
-
 BASE_DIR = Path.cwd()
 now_dir = os.getcwd()
 #BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -36,7 +33,7 @@ tmp = os.path.join(now_dir, "TEMP")
 shutil.rmtree(tmp, ignore_errors=True)
 os.makedirs(tmp, exist_ok=True)
 os.environ["TEMP"] = tmp
-weight_uvr5 = ('mdxnet_models')
+weight_uvr5 = ('model')
 
 uvr5_names = []
 for name in os.listdir(weight_uvr5):
@@ -109,12 +106,4 @@ with gr.Blocks(title="Nih Cuy") as app:
                 api_name="uvr_convert",
             )
 # Lanjutkan dengan menjalankan antarmuka pengguna
-if config.iscolab:
-    app.queue(concurrency_count=511, max_size=1022).launch(share=True)
-else:
-    app.queue(concurrency_count=511, max_size=1022).launch(
-        server_name="0.0.0.0",
-        inbrowser=not config.noautoopen,
-        server_port=config.listen_port,
-        quiet=True,
-    )
+app.launch(share=True)
