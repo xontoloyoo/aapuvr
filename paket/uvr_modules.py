@@ -13,17 +13,14 @@ from paket.vr import AudioPre, AudioPreDeEcho
 
 config = Config()
 
-
-def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format0):
+def uvr(model_name, dir_wav_input, save_root_vocal, wav_inputs, save_root_ins, agg, format0):
     infos = []
     try:
-        inp_root = inp_root.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        save_root_vocal = (
-            save_root_vocal.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        )
-        save_root_ins = (
-            save_root_ins.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        )
+        pre_fun = None
+        inp_root = dir_wav_input if dir_wav_input is not None else ""
+        save_root_vocal = save_root_vocal.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
+        save_root_ins = save_root_ins.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
+
         if model_name == "onnx_dereverb_By_FoxJoy":
             pre_fun = MDXNetDereverb(15, config.device)
         else:
@@ -36,15 +33,37 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                 device=config.device,
                 is_half=config.is_half,
             )
+
         is_hp3 = "HP3" in model_name
-        if inp_root != "":
-            paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
+
+        if dir_wav_input:
+            # Filter hanya file audio yang valid
+            paths = [
+                os.path.join(inp_root, name)
+                for name in os.listdir(inp_root)
+                if os.path.isfile(os.path.join(inp_root, name))
+                and not name.startswith(".")  # Abaikan file/folder tersembunyi
+                and name.lower().endswith((".wav", ".mp3", ".flac", ".m4a")) #Hanya memproses file berekstensi audio saja
+            ]
+
+        elif wav_inputs:
+            paths = [wav_inputs]
         else:
-            paths = [path.name for path in paths]
+            paths = []
+
         for path in paths:
-            inp_path = os.path.join(inp_root, path)
-            need_reformat = 1
+            inp_path = path
+            need_reformat = 0
             done = 0
+
+            # Periksa apakah file audio valid menggunakan ffmpeg
+            try:
+                ffmpeg.probe(inp_path)
+            except ffmpeg.Error as e:
+                infos.append(f"Skipping invalid audio file: {inp_path} - {e.stderr.decode()}")
+                yield "\n".join(infos)
+                continue  # Lewati file ini dan lanjutkan ke file berikutnya
+
             try:
                 info = ffmpeg.probe(inp_path, cmd="ffprobe")
                 if (
@@ -56,9 +75,12 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                         inp_path, save_root_ins, save_root_vocal, format0, is_hp3=is_hp3
                     )
                     done = 1
+                else:
+                    need_reformat = 1
             except:
                 need_reformat = 1
                 traceback.print_exc()
+
             if need_reformat == 1:
                 tmp_path = "%s/%s.reformatted.wav" % (
                     os.path.join(os.environ["TEMP"]),
@@ -69,6 +91,7 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                     % (inp_path, tmp_path)
                 )
                 inp_path = tmp_path
+
             try:
                 if done == 0:
                     pre_fun._path_audio_(
@@ -76,33 +99,28 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                     )
                 infos.append("%s->Success" % (os.path.basename(inp_path)))
                 yield "\n".join(infos)
-            except:
-                try:
-                    if done == 0:
-                        pre_fun._path_audio_(
-                            inp_path, save_root_ins, save_root_vocal, format0
-                        )
-                    infos.append("%s->Success" % (os.path.basename(inp_path)))
-                    yield "\n".join(infos)
-                except:
-                    infos.append(
-                        "%s->%s" % (os.path.basename(inp_path), traceback.format_exc())
-                    )
-                    yield "\n".join(infos)
-    except:
-        infos.append(traceback.format_exc())
+            except Exception as e:
+                infos.append(
+                    "%s->%s" % (os.path.basename(inp_path), traceback.format_exc())
+                )
+                yield "\n".join(infos)
+
+    except Exception as e:
+        infos.append(f"An error occurred: {e}")
         yield "\n".join(infos)
     finally:
         try:
-            if model_name == "onnx_dereverb_By_FoxJoy":
-                del pre_fun.pred.model
-                del pre_fun.pred.model_
-            else:
-                del pre_fun.model
-                del pre_fun
+            if pre_fun is not None:
+                if model_name == "onnx_dereverb_By_FoxJoy":
+                    del pre_fun.pred.model
+                    del pre_fun.pred.model_
+                else:
+                    del pre_fun.model
         except:
             traceback.print_exc()
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             logger.info("Executed torch.cuda.empty_cache()")
-    yield "\n".join(infos)
+
+        yield "\n".join(infos)
