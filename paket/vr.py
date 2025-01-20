@@ -14,7 +14,6 @@ from paket_uvr.model_param_init import ModelParameters
 from paket_uvr.nets_new import CascadedNet
 from paket.uvr_utils import inference
 
-
 class AudioPre:
     def __init__(self, agg, model_path, device, is_half, tta=False):
         self.model_path = model_path
@@ -74,7 +73,6 @@ class AudioPre:
                     X_wave[d + 1],
                     orig_sr=self.mp.param["band"][d + 1]["sr"],
                     target_sr=bp["sr"],
-                    #bp["sr"],
                     res_type=bp["res_type"],
                 )
             # Stft of wave source
@@ -122,6 +120,12 @@ class AudioPre:
                 )
             else:
                 wav_instrument = spec_utils.cmb_spectrogram_to_wave(y_spec_m, self.mp)
+            
+            # Periksa apakah ada nilai NaN atau Infinity
+            if np.isnan(wav_instrument).any() or np.isinf(wav_instrument).any():
+                logger.error(f"NaN or Infinity found in instrument audio: {name}. Skipping...")
+                return
+
             logger.info("%s instruments done" % name)
             if is_hp3 == True:
                 head = "vocal_"
@@ -167,6 +171,12 @@ class AudioPre:
                 )
             else:
                 wav_vocals = spec_utils.cmb_spectrogram_to_wave(v_spec_m, self.mp)
+            
+            # Periksa apakah ada nilai NaN atau Infinity
+            if np.isnan(wav_vocals).any() or np.isinf(wav_vocals).any():
+                logger.error(f"NaN or Infinity found in vocal audio: {name}. Skipping...")
+                return
+            
             logger.info("%s vocals done" % name)
             if format in ["wav", "flac"]:
                 sf.write(
@@ -195,7 +205,6 @@ class AudioPre:
                         except:
                             pass
 
-
 class AudioPreDeEcho:
     def __init__(self, agg, model_path, device, is_half, tta=False):
         self.model_path = model_path
@@ -209,7 +218,7 @@ class AudioPreDeEcho:
             "agg": agg,
             "high_end_process": "mirroring",
         }
-        mp = ModelParameters("infer/lib/uvr5_pack/lib_v5/modelparams/4band_v3.json")
+        mp = ModelParameters("paket/modelparams/4band_v3.json")
         nout = 64 if "DeReverb" in model_path else 48
         model = CascadedNet(mp.param["bins"] * 2, nout)
         cpk = torch.load(model_path, map_location="cpu")
@@ -254,8 +263,8 @@ class AudioPreDeEcho:
             else:  # lower bands
                 X_wave[d] = librosa.core.resample(
                     X_wave[d + 1],
-                    self.mp.param["band"][d + 1]["sr"],
-                    bp["sr"],
+                    orig_sr=self.mp.param["band"][d + 1]["sr"],
+                    target_sr=bp["sr"],
                     res_type=bp["res_type"],
                 )
             # Stft of wave source
@@ -303,6 +312,12 @@ class AudioPreDeEcho:
                 )
             else:
                 wav_instrument = spec_utils.cmb_spectrogram_to_wave(y_spec_m, self.mp)
+            
+            # Periksa apakah ada nilai NaN atau Infinity
+            if np.isnan(wav_instrument).any() or np.isinf(wav_instrument).any():
+                logger.error(f"NaN or Infinity found in instrument audio: {name}. Skipping...")
+                return
+            
             logger.info("%s instruments done" % name)
             if format in ["wav", "flac"]:
                 sf.write(
@@ -340,6 +355,12 @@ class AudioPreDeEcho:
                 )
             else:
                 wav_vocals = spec_utils.cmb_spectrogram_to_wave(v_spec_m, self.mp)
+            
+            # Periksa apakah ada nilai NaN atau Infinity
+            if np.isnan(wav_vocals).any() or np.isinf(wav_vocals).any():
+                logger.error(f"NaN or Infinity found in vocal audio: {name}. Skipping...")
+                return
+            
             logger.info("%s vocals done" % name)
             if format in ["wav", "flac"]:
                 sf.write(
