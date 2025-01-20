@@ -20,7 +20,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 version_config_list = [
-    os.path.join("paket", "v1", "32k.json"),  # Path relatif ke folder 'paket'
+    os.path.join("paket", "v1", "32k.json"),
     os.path.join("paket", "v1", "40k.json"),
     os.path.join("paket", "v1", "48k.json"),
     os.path.join("paket", "v2", "48k.json"),
@@ -53,6 +53,11 @@ class Config:
             self.noparallel,
             self.noautoopen,
             self.dml,
+            self.input_path,  # Ubah dari input_folder ke input_path
+            self.output_folder,
+            self.model,
+            self.agg,
+            self.format,
         ) = self.arg_parse()
         self.instead = ""
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
@@ -85,17 +90,43 @@ class Config:
             action="store_true",
             help="torch_dml",
         )
-        cmd_opts = parser.parse_args()
+        # Ganti -input menjadi -input_path dan hapus required=True
+        parser.add_argument("-input_path", type=str, help="Path to the input folder or the input file")
+        parser.add_argument("-output_folder", type=str, required=True, help="Path to the output folder where processed files will be saved.")
+        parser.add_argument("-agg", type=int, default=10, help="Aggressiveness of vocal extraction (0-20).")
+        parser.add_argument("-format", type=str, default="flac", choices=["wav", "flac", "mp3", "m4a"], help="Output file format.")
 
-        cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
+        # Pastikan folder 'model' ada sebelum mengakses isinya
+        if not os.path.isdir('model'):
+            raise ValueError("The 'model' folder does not exist.")
 
+        # Dapatkan daftar model yang valid sebelum mendefinisikan argumen -model
+        uvr5_names = [
+            name.replace(".pth", "").replace(".onnx","") for name in os.listdir('model')
+            if name.endswith((".pth", ".onnx"))
+        ]
+        if not uvr5_names:
+            raise ValueError("No valid model files found in the 'model' folder.")
+
+        # Tambahkan argumen -model dengan choices yang sudah valid
+        parser.add_argument("-model", type=str, default="HP5", choices=uvr5_names, help="Model to be used for processing.")
+
+        # Parse arguments
+        args = parser.parse_args()
+
+        # Kembalikan nilai-nilai argumen
         return (
-            cmd_opts.pycmd,
-            cmd_opts.port,
-            cmd_opts.colab,
-            cmd_opts.noparallel,
-            cmd_opts.noautoopen,
-            cmd_opts.dml,
+            args.pycmd,
+            args.port,
+            args.colab,
+            args.noparallel,
+            args.noautoopen,
+            args.dml,
+            args.input_path,  # Ganti menjadi input_path
+            args.output_folder,
+            args.model,
+            args.agg,
+            args.format,
         )
 
     # has_mps is only available in nightly pytorch (for now) and MasOS 12.3+.
@@ -230,6 +261,7 @@ class Config:
                     )
                 except:
                     pass
+                    
                 try:
                     os.rename(
                         "runtime\Lib\site-packages\onnxruntime-cuda",
